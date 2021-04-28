@@ -2306,7 +2306,7 @@ typedef void (*ecs_fini_action_t)(
  */
 
 /** Set flags describe if & how a matched entity should be substituted */
-#define EcsSetDefault   (0)  /* Default set, SuperSet|Self for This subject */
+#define EcsDefaultSet   (0)  /* Default set, SuperSet|Self for This subject */
 #define EcsSelf         (1)  /* Select self (inclusive) */
 #define EcsSuperSet     (2)  /* Select superset until predicate match */
 #define EcsSubSet       (4)  /* Select subset until predicate match */
@@ -3156,6 +3156,16 @@ typedef struct ecs_entity_desc_t {
 
     const char *sep;     /* Optional custom separator for hierarchical names */
 
+    const char *symbol;  /* Optional entity symbol. A symbol is an unscoped
+                          * identifier that can be used to lookup an entity. The
+                          * primary use case for this is to associate the entity
+                          * with a language identifier, such as a type or 
+                          * function name, where these identifiers differ from
+                          * the name they are registered with in flecs. For 
+                          * example, C type "EcsPosition" might be registered
+                          * as "flecs.components.transform.Position", with the
+                          * symbol set to "EcsPosition". */
+
     bool use_low_id;     /* When set to true, a low id (typically reserved for
                           * components) will be used to create the entity, if
                           * no id is specified. */
@@ -3165,6 +3175,12 @@ typedef struct ecs_entity_desc_t {
 
     /* Array of ids to remove from the existing entity. */
     ecs_id_t remove[ECS_MAX_ADD_REMOVE];
+
+    /* String expression with components to add */
+    const char *add_expr;
+
+    /* String expression with components to remove */
+    const char *remove_expr;
 } ecs_entity_desc_t;
 
 
@@ -3388,7 +3404,10 @@ extern "C" {
     id = ecs_new_entity(world, id, #id, #__VA_ARGS__)
 
 #define ECS_ENTITY(world, id, ...)\
-    ecs_entity_t id = ecs_new_entity(world, 0, #id, #__VA_ARGS__);\
+    ecs_entity_t id = ecs_entity_init(world, &(ecs_entity_desc_t){\
+        .name = #id,\
+        .add_expr = #__VA_ARGS__\
+    });\
     (void)id
 
 #define ECS_COMPONENT(world, id) \
@@ -3410,7 +3429,10 @@ extern "C" {
     ecs_type(id) = ecs_type_from_entity(world, ecs_id(id))
 
 #define ECS_TAG(world, id)\
-    ECS_ENTITY(world, id, 0);\
+    ecs_entity_t id = ecs_entity_init(world, &(ecs_entity_desc_t){\
+        .name = #id,\
+        .symbol = #id\
+    });\
     ECS_VECTOR_STACK(FLECS__T##id, ecs_entity_t, &id, 1);\
     (void)ecs_type(id)
 
@@ -5797,6 +5819,33 @@ const char* ecs_set_name_prefix(
 FLECS_API
 bool ecs_term_is_set(
     const ecs_term_t *term);
+
+/** Test whether a term is a trivial term.
+ * A trivial term is a term that only contains a type id. Trivial terms must not
+ * have read/write annotations, relation substitutions and subjects other than
+ * 'This'. Examples of trivial terms are:
+ * - 'Position'
+ * - 'Position(This)'
+ * - '(Likes, IceCream)'
+ * - 'Likes(This, IceCream)'
+ * 
+ * Examples of non-trivial terms are:
+ * - '[in] Position'
+ * - 'Position(MyEntity)'
+ * - 'Position(self|superset)'
+ *
+ * Trivial terms are useful in expressions that should just represent a list of
+ * components, such as when parsing the list of components to add to an entity.
+ *
+ * The term passed to this operation must be finalized. Terms returned by the
+ * parser are guaranteed to be finalized.
+ *
+ * @param term The term.
+ * @return True if term is trivial, false if it is not.
+ */
+FLECS_API
+bool ecs_term_is_trivial(
+    ecs_term_t *term);
 
 /** Finalize term.
  * Ensure that all fields of a term are consistent and filled out. This 

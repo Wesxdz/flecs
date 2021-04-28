@@ -88,7 +88,7 @@ ecs_vector_t* expr_to_ids(
             goto done;
         }
 
-        if (term.args[0].set != EcsSetDefault) {
+        if (term.args[0].set != EcsDefaultSet) {
             ecs_parser_error(name, expr, (ptr - expr), 
                 "source modifiers not supported for type expressions");
             goto error;
